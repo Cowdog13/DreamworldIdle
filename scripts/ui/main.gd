@@ -193,10 +193,8 @@ func _make_unit_panel(u: BattleUnit) -> PanelContainer:
 	name_label.add_theme_font_size_override("font_size", 14)
 	name_label.clip_text = true
 	v.add_child(name_label)
-	var hp := ProgressBar.new()
-	hp.show_percentage = false
-	hp.custom_minimum_size.y = 14
-	hp.add_theme_stylebox_override("fill", _fill_style(Color("4caf6a") if u.side == BattleUnit.SIDE_PLAYER else Color("c0504d")))
+	var hp := HealthBar.new()
+	hp.fill_color = Color("4caf6a") if u.side == BattleUnit.SIDE_PLAYER else Color("c0504d")
 	v.add_child(hp)
 	var cast := ProgressBar.new()
 	cast.show_percentage = false
@@ -232,10 +230,9 @@ func _update_battle() -> void:
 	for u in widgets:
 		var w: Dictionary = widgets[u]
 		var armor_text := "  armor %d" % roundi(u.armor) if u.armor > 0.5 else ""
-		var amp_text := "  +heal boost" if u.heal_amp > 0.0 else ""
+		var amp_text := "  +heal" if u.heal_amp > 0.0 else ""
 		w.name.text = "%s  Lv %d   HP %d/%d%s%s" % [u.name, u.level, ceili(u.hp), roundi(u.max_hp), armor_text, amp_text]
-		w.hp.max_value = u.max_hp
-		w.hp.value = u.hp
+		w.hp.set_values(u.hp, u.max_hp, u.armor)
 		w.cast.max_value = maxf(u.phase_total, 0.01)
 		w.cast.value = u.phase_total - u.phase_left if u.phase != "wait" else 0.0
 		w.cast_label.text = u.cast_text()
