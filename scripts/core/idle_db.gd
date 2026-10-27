@@ -82,7 +82,7 @@ static func level_power_mult(level: int) -> float:
 
 
 static func xp_to_next(level: int) -> int:
-	return int(round(30.0 * pow(level, 1.4)))
+	return int(round(100.0 * pow(level, 1.7)))
 
 
 ## Builds a ready-to-fight unit. plan is a list of timeline blocks; with auto_plan an empty plan is filled in.

@@ -74,7 +74,7 @@ func _build() -> void:
 	player_col = _make_column(cols, "Your Dreamshapes")
 	enemy_col = _make_column(cols, "Enemies")
 	log_view = RichTextLabel.new()
-	log_view.custom_minimum_size.y = 150
+	log_view.custom_minimum_size.y = 110
 	log_view.scroll_following = true
 	battle_box.add_child(log_view)
 
@@ -89,14 +89,18 @@ func _build() -> void:
 
 
 func _make_column(parent: Control, title: String) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	parent.add_child(scroll)
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override("separation", 6)
+	col.add_theme_constant_override("separation", 4)
 	var l := Label.new()
 	l.text = title
 	l.add_theme_font_size_override("font_size", 20)
 	col.add_child(l)
-	parent.add_child(col)
+	scroll.add_child(col)
 	return col
 
 
@@ -167,6 +171,8 @@ func _show_battle(b: IdleBattle) -> void:
 					col.add_child(_make_unit_panel(u))
 
 
+## Compact card: status on the left, the unit's 30 second timeline on the right, so five
+## Dreamshapes per side fit on screen (the columns also scroll if they ever do not).
 func _make_unit_panel(u: BattleUnit) -> PanelContainer:
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
@@ -174,20 +180,27 @@ func _make_unit_panel(u: BattleUnit) -> PanelContainer:
 	style.border_color = CLASS_COLORS.get(u.dclass, Color.WHITE)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
-	style.set_content_margin_all(8)
+	style.set_content_margin_all(6)
 	panel.add_theme_stylebox_override("panel", style)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 10)
+	panel.add_child(h)
 	var v := VBoxContainer.new()
-	panel.add_child(v)
+	v.custom_minimum_size.x = 250
+	v.add_theme_constant_override("separation", 2)
+	h.add_child(v)
 	var name_label := Label.new()
+	name_label.add_theme_font_size_override("font_size", 14)
+	name_label.clip_text = true
 	v.add_child(name_label)
 	var hp := ProgressBar.new()
 	hp.show_percentage = false
-	hp.custom_minimum_size.y = 18
+	hp.custom_minimum_size.y = 14
 	hp.add_theme_stylebox_override("fill", _fill_style(Color("4caf6a") if u.side == BattleUnit.SIDE_PLAYER else Color("c0504d")))
 	v.add_child(hp)
 	var cast := ProgressBar.new()
 	cast.show_percentage = false
-	cast.custom_minimum_size.y = 10
+	cast.custom_minimum_size.y = 8
 	cast.add_theme_stylebox_override("fill", _fill_style(Color("d9b44a")))
 	v.add_child(cast)
 	var cast_label := Label.new()
@@ -196,7 +209,9 @@ func _make_unit_panel(u: BattleUnit) -> PanelContainer:
 	var bar := TimelineBar.new()
 	bar.setup(u.abilities, 14.0)
 	bar.plan = u.schedule
-	v.add_child(bar)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(bar)
 	widgets[u] = {"panel": panel, "name": name_label, "hp": hp, "cast": cast, "cast_label": cast_label, "bar": bar}
 	return panel
 

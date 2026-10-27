@@ -22,7 +22,7 @@ var hover_time := -1.0
 
 func setup(ability_list: Array, lane_h: float = LANE_H) -> void:
 	abilities = ability_list
-	custom_minimum_size = Vector2(300, RULER_H + abilities.size() * lane_h)
+	custom_minimum_size = Vector2(200, RULER_H + abilities.size() * lane_h)
 	mouse_filter = Control.MOUSE_FILTER_STOP if editable else Control.MOUSE_FILTER_IGNORE
 
 

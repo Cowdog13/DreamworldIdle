@@ -1,14 +1,14 @@
 {
 	"whispering_meadow": {
-		"name": "Whispering Meadow", "class": "Flora", "recommended_level": 1, "requires": "",
+		"name": "Whispering Meadow", "class": "Flora", "recommended_level": 8, "requires": "",
 		"desc": "A gentle plane born from a child's first hopeful daydream.",
 		"first_clear_equipment": "wooden_buckler",
 		"drops": ["sharpened_stone"],
 		"waves": [
-			[{"id": "snapfang", "level": 1, "row": "front"}, {"id": "snapfang", "level": 1, "row": "front"}],
-			[{"id": "snapfang", "level": 1, "row": "front"}, {"id": "wisp_shade", "level": 1, "row": "back"}],
-			[{"id": "burrowhound", "level": 1, "row": "front"}, {"id": "wisp_shade", "level": 1, "row": "back"}],
-			[{"id": "great_snapfang", "level": 2, "row": "front"}]
+			[{"id": "snapfang", "level": 6, "row": "front"}, {"id": "snapfang", "level": 6, "row": "front"}, {"id": "wisp_shade", "level": 6, "row": "back"}],
+			[{"id": "burrowhound", "level": 7, "row": "front"}, {"id": "snapfang", "level": 7, "row": "front"}, {"id": "wisp_shade", "level": 7, "row": "back"}],
+			[{"id": "burrowhound", "level": 8, "row": "front"}, {"id": "snapfang", "level": 8, "row": "front"}, {"id": "wisp_shade", "level": 8, "row": "back"}, {"id": "wisp_shade", "level": 8, "row": "back"}],
+			[{"id": "great_snapfang", "level": 10, "row": "front"}, {"id": "snapfang", "level": 8, "row": "front"}, {"id": "wisp_shade", "level": 8, "row": "back"}]
 		]
 	},
 	"ember_flats": {

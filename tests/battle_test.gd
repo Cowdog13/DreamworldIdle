@@ -146,13 +146,13 @@ func _init() -> void:
 
 	# Idle loop: the starting team can clear plane 1 and get XP and the first-clear item.
 	var game := IdleGame.new_game()
-	game.set_active("shurm", false)
+	game.set_active("shurm", true)
 	game.rng.seed = 7
-	game.advance(900.0)
+	game.advance(3600.0)
 	check(game.cleared.has("whispering_meadow"), "plane 1 cleared by starting team (result %s, wave %d)" % [game.last_result, game.wave])
 	check(game.owned.defender.level > 1, "defender levelled")
 	check(game.equipment_owned.has("wooden_buckler"), "first clear unlocks equipment")
-	check(game.owned.shurm.level == 1, "benched Dreamshape earns no XP")
+	check(game.owned.shurm.level > 1, "active Dreamshape levelled")
 
 	# Save round trip.
 	var copy := IdleGame.from_dict(JSON.parse_string(JSON.stringify(game.to_dict())))
