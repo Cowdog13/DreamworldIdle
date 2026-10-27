@@ -1,14 +1,13 @@
 extends Control
-## Whole UI, built in code. Tabs: Battle (watch), Team (lineup, plans, equipment), Dreamplanes, Equipment.
+## Whole UI, built in code. Tabs: Battle (watch), Team (lineup, 30 second timelines, equipment), Dreamplanes, Equipment.
+## Time runs in real time only: one second of battle is one second on the clock.
 
 const CLASS_COLORS := {
 	"Flora": Color("5fae5f"), "Mechanical": Color("8e9aa8"), "Elemental": Color("e0703a"),
 	"Animalistic": Color("c4944a"), "Shadow": Color("8660b8"), "Void": Color("5a5f8a"),
 }
-const SPEEDS := [1, 5, 20]
 
 var game: IdleGame
-var speed := 1
 var autosave_left := 30.0
 
 var top_label: Label
@@ -23,6 +22,7 @@ var team_box: VBoxContainer
 var plane_box: VBoxContainer
 var equip_box: VBoxContainer
 var selected_id := ""
+var brush := -1
 var shown_battle: IdleBattle = null
 var widgets: Dictionary = {}
 var notice_time := 0.0
@@ -57,13 +57,6 @@ func _build() -> void:
 	top_label = Label.new()
 	top_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(top_label)
-	for s in SPEEDS:
-		var b := Button.new()
-		b.text = "x%d" % s
-		b.toggle_mode = true
-		b.button_pressed = s == speed
-		b.pressed.connect(_set_speed.bind(s))
-		bar.add_child(b)
 
 	tabs = TabContainer.new()
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -118,15 +111,8 @@ func _make_tab(tab_name: String) -> VBoxContainer:
 	return box
 
 
-func _set_speed(s: int) -> void:
-	speed = s
-	for b in top_label.get_parent().get_children():
-		if b is Button:
-			b.button_pressed = b.text == "x%d" % s
-
-
 func _process(delta: float) -> void:
-	game.advance(delta * speed)
+	game.advance(delta)
 	if game.battle != shown_battle:
 		_show_battle(game.battle)
 	_update_battle()
@@ -207,7 +193,11 @@ func _make_unit_panel(u: BattleUnit) -> PanelContainer:
 	var cast_label := Label.new()
 	cast_label.add_theme_font_size_override("font_size", 12)
 	v.add_child(cast_label)
-	widgets[u] = {"panel": panel, "name": name_label, "hp": hp, "cast": cast, "cast_label": cast_label}
+	var bar := TimelineBar.new()
+	bar.setup(u.abilities, 14.0)
+	bar.plan = u.schedule
+	v.add_child(bar)
+	widgets[u] = {"panel": panel, "name": name_label, "hp": hp, "cast": cast, "cast_label": cast_label, "bar": bar}
 	return panel
 
 
@@ -232,8 +222,10 @@ func _update_battle() -> void:
 		w.hp.max_value = u.max_hp
 		w.hp.value = u.hp
 		w.cast.max_value = maxf(u.phase_total, 0.01)
-		w.cast.value = u.phase_total - u.phase_left
+		w.cast.value = u.phase_total - u.phase_left if u.phase != "wait" else 0.0
 		w.cast_label.text = u.cast_text()
+		w.bar.playhead = u.cycle_pos() if u.alive() else -1.0
+		w.bar.queue_redraw()
 		w.panel.modulate = Color(1, 1, 1, 1.0 if u.alive() else 0.35)
 	b.events.clear()
 	var lines := b.log_lines.slice(-12)
@@ -289,7 +281,7 @@ func _make_team_row(id: String) -> Control:
 		_rebuild_team())
 	row.add_child(gear)
 	var edit := Button.new()
-	edit.text = "Edit plan"
+	edit.text = "Edit timeline"
 	edit.toggle_mode = true
 	edit.button_pressed = id == selected_id
 	edit.pressed.connect(func(): selected_id = id; _rebuild_team())
@@ -302,36 +294,58 @@ func _make_plan_editor(id: String) -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 6)
 	var plan: Array = game.owned[id].plan
+	var abilities: Array = def.abilities
 	var title := Label.new()
-	title.text = "%s ability order (%d/%d slots). Repeats forever; empty = every ability in order." % [def.name, plan.size(), IdleGame.MAX_PLAN_SLOTS]
+	title.text = "%s: 30 second timeline (repeats forever)" % def.name
 	title.add_theme_font_size_override("font_size", 18)
 	box.add_child(title)
-	var adds := HBoxContainer.new()
-	box.add_child(adds)
-	var abilities: Array = def.abilities
+	var help := Label.new()
+	help.text = "Pick an ability, then click the bar to place it (green = fits). A block spans startup + resolve (solid) and cooldown (faded). Abilities can't overlap each other's solid part, and an ability can't repeat until its cooldown ends. Click a block to remove it."
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help.add_theme_font_size_override("font_size", 13)
+	box.add_child(help)
+	var bar := TimelineBar.new()
+	bar.editable = true
+	bar.setup(abilities)
+	bar.plan = plan
+	bar.brush = brush if brush < abilities.size() else -1
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.slot_clicked.connect(func(a: int, t: float):
+		if not game.place(id, a, t):
+			notice_label.text = "That doesn't fit there."
+			notice_time = 2.0
+		_rebuild_team())
+	bar.block_clicked.connect(func(i: int): game.remove_block(id, i); _rebuild_team())
+	var tools := HBoxContainer.new()
+	box.add_child(tools)
+	var group := ButtonGroup.new()
+	group.allow_unpress = true
 	for i in abilities.size():
 		var a: Dictionary = abilities[i]
 		var b := Button.new()
-		b.text = "+ %s" % a.name
-		b.tooltip_text = "%s\nStartup %.1fs, resolve %.1fs, cooldown %.1fs" % [a.text, a.startup, a.resolve, a.cooldown]
-		b.disabled = plan.size() >= IdleGame.MAX_PLAN_SLOTS
-		b.pressed.connect(func(): game.add_to_plan(id, i); _rebuild_team())
-		adds.add_child(b)
+		b.text = "%s (%.1fs)" % [a.name, Schedule.total_time(a)]
+		b.tooltip_text = a.text
+		b.toggle_mode = true
+		b.button_group = group
+		b.button_pressed = i == bar.brush
+		b.add_theme_color_override("font_color", TimelineBar.LANE_COLORS[i % TimelineBar.LANE_COLORS.size()])
+		b.toggled.connect(func(on: bool):
+			brush = i if on else -1
+			bar.brush = brush
+			bar.queue_redraw())
+		tools.add_child(b)
+	var fill := Button.new()
+	fill.text = "Auto-fill"
+	fill.pressed.connect(func(): game.auto_fill(id); _rebuild_team())
+	tools.add_child(fill)
 	var clear := Button.new()
 	clear.text = "Clear"
 	clear.pressed.connect(func(): game.clear_plan(id); _rebuild_team())
-	adds.add_child(clear)
-	var slots := HFlowContainer.new()
-	box.add_child(slots)
-	for s in plan.size():
-		var b := Button.new()
-		b.text = "%d. %s  x" % [s + 1, abilities[plan[s]].name]
-		b.tooltip_text = "Click to remove"
-		b.pressed.connect(func(): game.remove_from_plan(id, s); _rebuild_team())
-		slots.add_child(b)
+	tools.add_child(clear)
+	box.add_child(bar)
 	for a in abilities:
 		var l := Label.new()
-		l.text = "%s: %s (startup %.1fs, resolve %.1fs, cooldown %.1fs)" % [a.name, a.text, a.startup, a.resolve, a.cooldown]
+		l.text = "%s: %s (startup %.1fs, resolve %.1fs, cooldown %.1fs, block %.1fs)" % [a.name, a.text, a.startup, a.resolve, a.cooldown, Schedule.total_time(a)]
 		l.add_theme_font_size_override("font_size", 13)
 		box.add_child(l)
 	return box

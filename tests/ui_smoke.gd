@@ -6,8 +6,8 @@ func _init() -> void:
 	root.add_child(main)
 	await process_frame
 	main.game = IdleGame.new_game()
-	main.speed = 20
-	for i in 400:
+	main.game.advance(120.0)
+	for i in 5:
 		await process_frame
 	var fails := 0
 	if main.shown_battle == null and main.game.battle != null:
@@ -16,9 +16,7 @@ func _init() -> void:
 	if main.widgets.is_empty() and main.game.battle != null:
 		fails += 1
 		print("FAIL: no unit widgets")
-	main.game.set_active("cannonier", false)
 	main.game.set_active("shurm", true)
 	main._rebuild_team()
-	main._set_speed(5)
 	print("ui_smoke: %d failure(s), plane wave %d, vorx %d" % [fails, main.game.wave, main.game.vorx])
 	quit(1 if fails > 0 else 0)

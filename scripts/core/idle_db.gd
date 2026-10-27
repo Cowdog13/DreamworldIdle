@@ -85,8 +85,8 @@ static func xp_to_next(level: int) -> int:
 	return int(round(30.0 * pow(level, 1.4)))
 
 
-## Builds a ready-to-fight unit. plan is a list of ability indexes (empty = every ability in order).
-static func make_unit(id: String, level: int, side: int, row: String, plan: Array = [], equipment_id: String = "") -> BattleUnit:
+## Builds a ready-to-fight unit. plan is a list of timeline blocks; with auto_plan an empty plan is filled in.
+static func make_unit(id: String, level: int, side: int, row: String, plan: Array = [], equipment_id: String = "", auto_plan: bool = true) -> BattleUnit:
 	var def := dreamshape(id)
 	var mods: Dictionary = equipment(equipment_id) if equipment_id != "" else {}
 	var u := BattleUnit.new()
@@ -100,13 +100,11 @@ static func make_unit(id: String, level: int, side: int, row: String, plan: Arra
 	u.hp = u.max_hp
 	u.power = def.base_power * level_power_mult(level) * (1.0 + mods.get("power_pct", 0.0))
 	u.armor = mods.get("start_armor", 0.0)
-	u.cooldown_mult = maxf(0.1, 1.0 + mods.get("cooldown_pct", 0.0))
 	u.startup_mult = maxf(0.0, 1.0 + mods.get("startup_pct", 0.0))
 	u.abilities = def.abilities
 	u.xp_value = def.get("xp", 0)
 	u.vorx_value = def.get("vorx", 0)
-	if plan.is_empty():
-		for i in def.abilities.size():
-			plan.append(i)
-	u.plan = plan
+	if plan.is_empty() and auto_plan:
+		plan = Schedule.auto_plan(def.abilities)
+	u.schedule = plan
 	return u

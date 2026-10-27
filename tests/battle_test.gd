@@ -73,30 +73,68 @@ func _init() -> void:
 	var sel := b._select(st, "allies_same_row", 1)
 	check(sel.size() == 1 and sel[0] == st, "Station hits same row only")
 
-	# Timeline: Barrage locks after 1s startup and lands after 2s more.
+	# Timeline: Barrage (startup 1s, resolve 4s) lands exactly 5s after its block starts.
 	b = IdleBattle.new(6)
-	var cn := IdleDB.make_unit("cannonier", 1, 0, "back", [0])
-	var dummy := IdleDB.make_unit("burrowhound", 1, 1, "front")
-	dummy.plan = [0]
-	dummy.abilities = [{"id": "x", "name": "Idle", "effect": "armor", "target": "self", "power": "small", "startup": 99.0, "resolve": 0.0, "cooldown": 0.0}]
+	var cn := IdleDB.make_unit("cannonier", 1, 0, "back", [{"a": 0, "start": 0.0}], "", false)
+	var dummy := IdleDB.make_unit("burrowhound", 1, 1, "front", [], "", false)
 	b.add_unit(cn)
 	b.add_unit(dummy)
-	for i in 29:
+	for i in 49:
 		b.advance(0.1)
-	check(dummy.hp == dummy.max_hp, "Barrage has not landed at 2.9s")
-	for i in 3:
+	check(dummy.hp == dummy.max_hp, "Barrage has not landed at 4.9s")
+	for i in 2:
 		b.advance(0.1)
-	check(dummy.hp < dummy.max_hp, "Barrage lands at 3s")
+	check(dummy.hp < dummy.max_hp, "Barrage lands at 5s")
 
-	# Energy and slot limits.
+	# One second of battle is one second: a block starting at 2s with 1s startup + 1s resolve lands at 4s.
+	b = IdleBattle.new(8)
+	var probe := IdleDB.make_unit("snapfang", 1, 0, "front", [{"a": 0, "start": 2.0}], "", false)
+	probe.abilities = [{"id": "p", "name": "Probe", "effect": "armor", "target": "self", "power": "small", "startup": 1.0, "resolve": 1.0, "cooldown": 1.0}]
+	b.add_unit(probe)
+	b.add_unit(IdleDB.make_unit("burrowhound", 1, 1, "front", [], "", false))
+	for i in 39:
+		b.advance(0.1)
+	check(probe.armor == 0.0, "probe not resolved at 3.9s")
+	b.advance(0.1)
+	b.advance(0.1)
+	check(probe.armor > 0.0, "probe resolved at 4.0s")
+	# The timeline loops every 30s: second resolve at 34s.
+	probe.armor = 0.0
+	for i in 298:
+		b.advance(0.1)
+	check(probe.armor == 0.0, "probe not repeated at 33.9s")
+	b.advance(0.2)
+	check(probe.armor > 0.0, "probe repeats on the 30s loop")
+
+	# Timeline rules.
+	var defs: Array = IdleDB.dreamshape("defender").abilities
+	var plan := []
+	check(Schedule.can_place(defs, plan, 1, 0.0), "Wack fits at 0")
+	plan.append({"a": 1, "start": 0.0})  # Wack: active 0-2, total 4
+	check(not Schedule.can_place(defs, plan, 0, 1.0), "active parts cannot overlap")
+	check(Schedule.can_place(defs, plan, 0, 2.0), "next ability can start while Wack recovers")
+	check(not Schedule.can_place(defs, plan, 1, 3.5), "same ability cannot repeat before its cooldown ends")
+	check(Schedule.can_place(defs, plan, 1, 4.0), "same ability repeats once recovered")
+	check(not Schedule.can_place(defs, plan, 1, 27.0), "block must fit inside 30s")
+	check(Schedule.can_place(defs, plan, 1, 26.0), "block ending exactly at 30s fits")
+	var auto := Schedule.auto_plan(defs)
+	check(auto.size() > 3, "auto plan fills the timeline")
+	var ok := true
+	var test_plan := []
+	for blk in auto:
+		ok = ok and Schedule.can_place(defs, test_plan, blk.a, blk.start)
+		test_plan.append(blk)
+	check(ok, "auto plan obeys the rules")
+
+	# Energy: all three starting Dreamshapes fit in 10.
 	var g := IdleGame.new_game()
-	check(g.energy_used() == 8, "starting team uses 8 energy")
-	check(not g.set_active("shurm", true), "cannot exceed 10 energy")
-	g.set_active("cannonier", false)
-	check(g.set_active("shurm", true) and g.energy_used() == 7, "swap in Shurm")
-	for i in 25:
-		g.add_to_plan("shurm", 0)
-	check(g.owned.shurm.plan.size() == IdleGame.MAX_PLAN_SLOTS, "plan capped at 20")
+	check(g.set_active("shurm", true) and g.energy_used() == 10, "Shurm + Defender + Cannonier = 10 energy")
+	check(g.set_active("shurm", false), "can bench again")
+	g.set_active("shurm", true)
+	g.owned.shurm.plan = []
+	check(g.place("shurm", 0, 0.0) and not g.place("shurm", 0, 2.0), "game placement enforces cooldown")
+	g.remove_block("shurm", 0)
+	check(g.owned.shurm.plan.is_empty(), "block removed")
 
 	# Equipment: one item, one holder.
 	g.unlock_equipment("sharpened_stone")
@@ -108,8 +146,9 @@ func _init() -> void:
 
 	# Idle loop: the starting team can clear plane 1 and get XP and the first-clear item.
 	var game := IdleGame.new_game()
+	game.set_active("shurm", false)
 	game.rng.seed = 7
-	game.advance(600.0)
+	game.advance(900.0)
 	check(game.cleared.has("whispering_meadow"), "plane 1 cleared by starting team (result %s, wave %d)" % [game.last_result, game.wave])
 	check(game.owned.defender.level > 1, "defender levelled")
 	check(game.equipment_owned.has("wooden_buckler"), "first clear unlocks equipment")

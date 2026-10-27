@@ -5,14 +5,14 @@ extends RefCounted
 
 const MAX_ACTIVE := 5
 const MAX_ENERGY := 10
-const MAX_PLAN_SLOTS := 20
 const BETWEEN_BATTLES := 1.5
 const DROP_CHANCE := 0.03
 const SAVE_PATH := "user://idle_save.json"
 const OFFLINE_CAP := 2.0 * 3600.0
 const STEP := 0.1
 
-## Owned Dreamshapes: id -> {level, xp, equipment, row, active, plan}.
+## Owned Dreamshapes: id -> {level, xp, equipment, row, active, plan}. A plan is a list of timeline
+## blocks {a: ability index, start: seconds} (see Schedule).
 var owned: Dictionary = {}
 var equipment_owned: Array = []
 var vorx := 0
@@ -35,6 +35,7 @@ static func new_game() -> IdleGame:
 	var g := IdleGame.new()
 	for id in ["shurm", "defender", "cannonier"]:
 		g.owned[id] = {"level": 1, "xp": 0, "equipment": "", "row": "front", "active": false, "plan": []}
+		g.auto_fill(id)
 	g.owned.cannonier.row = "back"
 	g.owned.defender.active = true
 	g.owned.cannonier.active = true
@@ -80,31 +81,33 @@ func set_row(id: String, row: String) -> void:
 	owned[id].row = row
 
 
-## The ability order actually used: the player's plan, or every ability in order if none is set.
-func effective_plan(id: String) -> Array:
-	var plan: Array = owned[id].plan
-	if plan.is_empty():
-		var out := []
-		for i in IdleDB.dreamshape(id).abilities.size():
-			out.append(i)
-		return out
-	return plan
+func abilities_of(id: String) -> Array:
+	return IdleDB.dreamshape(id).abilities
 
 
-func add_to_plan(id: String, ability_index: int) -> bool:
-	if owned[id].plan.size() >= MAX_PLAN_SLOTS:
+func can_place(id: String, ability_index: int, start: float) -> bool:
+	return Schedule.can_place(abilities_of(id), owned[id].plan, ability_index, start)
+
+
+func place(id: String, ability_index: int, start: float) -> bool:
+	if not can_place(id, ability_index, start):
 		return false
-	owned[id].plan.append(ability_index)
+	owned[id].plan.append({"a": ability_index, "start": start})
+	Schedule.sort_plan(owned[id].plan)
 	return true
 
 
-func remove_from_plan(id: String, slot: int) -> void:
-	if slot >= 0 and slot < owned[id].plan.size():
-		owned[id].plan.remove_at(slot)
+func remove_block(id: String, index: int) -> void:
+	if index >= 0 and index < owned[id].plan.size():
+		owned[id].plan.remove_at(index)
 
 
 func clear_plan(id: String) -> void:
 	owned[id].plan = []
+
+
+func auto_fill(id: String) -> void:
+	owned[id].plan = Schedule.auto_plan(abilities_of(id))
 
 
 # ---- Equipment ----------------------------------------------------------
@@ -176,7 +179,7 @@ func _start_wave() -> void:
 	var b := IdleBattle.new()
 	for id in active_ids():
 		var o: Dictionary = owned[id]
-		b.add_unit(IdleDB.make_unit(id, o.level, BattleUnit.SIDE_PLAYER, o.row, effective_plan(id).duplicate(), o.equipment))
+		b.add_unit(IdleDB.make_unit(id, o.level, BattleUnit.SIDE_PLAYER, o.row, o.plan.duplicate(true), o.equipment, false))
 	for e in IdleDB.dreamplane(plane_id).waves[wave]:
 		b.add_unit(IdleDB.make_unit(e.id, e.level, BattleUnit.SIDE_ENEMY, e.row))
 	battle = b
@@ -254,10 +257,13 @@ static func from_dict(d: Dictionary) -> IdleGame:
 			continue
 		var o: Dictionary = d.owned[id]
 		var plan := []
-		for i in o.get("plan", []):
-			plan.append(int(i))
+		for b in o.get("plan", []):
+			if b is Dictionary:
+				plan.append({"a": int(b.a), "start": float(b.start)})
 		g.owned[id] = {"level": int(o.get("level", 1)), "xp": int(o.get("xp", 0)), "equipment": o.get("equipment", ""),
 			"row": o.get("row", "front"), "active": bool(o.get("active", false)), "plan": plan}
+		if plan.is_empty():
+			g.auto_fill(id)
 	g.equipment_owned = d.get("equipment_owned", [])
 	g.vorx = int(d.get("vorx", 0))
 	g.cleared = d.get("cleared", [])

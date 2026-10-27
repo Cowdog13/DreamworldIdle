@@ -5,13 +5,15 @@ Godot project (main scene `scenes/main.tscn`). It is separate from the card game
 
 ## Rules as built
 - Summon up to **5 Dreamshapes** with at most **10 total energy**. Each has 2-4 abilities.
-- Each Dreamshape has an **ability order of up to 20 slots** that repeats forever (empty = all abilities in order). No direct control.
-- Ability timeline: **startup** (target locks at the end) -> **resolve** (effect lands at the end) -> **cooldown** (nothing else can start) -> next ability in the order.
-  A target that dies before the effect lands is replaced by a new pick using the same rule.
+- Each Dreamshape has a **30 second timeline** that loops forever. You add and remove ability blocks on it (Team tab: pick an ability, click the bar; click a block to remove it).
+  A block spans the whole time from the ability starting until it has recovered: **startup + resolve + cooldown**.
+  The solid part (startup + resolve) occupies the Dreamshape, so those can't overlap. The cooldown only locks that same ability, so another ability can be used while it recovers, but the same ability can't be used again until its cooldown has passed. Blocks must fit inside the 30 seconds. **Auto-fill** builds a plan for you. No direct control in battle.
+- Target locks at the end of startup; the effect lands at the end of resolve. A target that dies before the effect lands is replaced by a new pick using the same rule.
+- Time is real time only (1 second of battle = 1 second on the clock). There are no speed-up options.
 - **Frontline / backline** per Dreamshape. Single-target attacks must hit the frontline first (backline only once the frontline is dead). Reaching Strike prefers the backline.
   Multiple valid targets: one is picked at random. "Lowest health ally" compares health percentage.
 - **Armor** is soaked point for point before health. It stays until used and is capped at max health.
-- **Equipment**: 1 slot per Dreamshape, one copy of each item, unlocked by first-clearing Dreamplanes and monster drops. Edits (team, rows, order, equipment) apply when the next battle starts.
+- **Equipment**: 1 slot per Dreamshape, one copy of each item, unlocked by first-clearing Dreamplanes and monster drops. Edits (team, rows, timelines, equipment) apply when the next battle starts.
 - Battle ends when a whole side is defeated (or after 180s, counted as a loss). Waves of a Dreamplane repeat forever; a loss restarts the plane. Kills give XP to every active Dreamshape.
 - Progress saves to `user://idle_save.json` and the game fast-forwards up to 2 hours of offline time on load.
 

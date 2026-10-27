@@ -3,14 +3,12 @@ extends RefCounted
 ## Simulates one fight between a player side and an enemy side. Call advance(dt) with small
 ## steps (0.1s or less). There is no direct control: units follow their ability plans.
 ##
-## Ability timeline: startup -> resolve -> cooldown, then the next ability in the plan starts.
-## Targets are locked when startup ends; the effect lands when resolve ends (a target that died
-## in between is replaced by a fresh pick using the same rule).
+## Each unit follows its 30 second timeline (see Schedule): wait until a block's start time, then
+## startup -> resolve, repeating the timeline forever. Targets are locked when startup ends; the
+## effect lands when resolve ends (a target that died in between is replaced by a fresh pick using
+## the same rule). Cooldowns are enforced by the timeline editor, not at runtime.
 
 const TIMEOUT := 180.0
-## Guards against a plan whose abilities all have zero durations looping forever.
-const MIN_CYCLE := 0.1
-
 var units: Array[BattleUnit] = []
 var time := 0.0
 ## "" while fighting, then "won", "lost" or "timeout" (timeout counts as a loss).
@@ -69,23 +67,29 @@ func _update_unit(u: BattleUnit, dt: float) -> void:
 	while u.alive():
 		if u.phase_left > left:
 			u.phase_left -= left
+			u.clock += left
 			return
 		left -= u.phase_left
+		u.clock += u.phase_left
 		u.phase_left = 0.0
 		_finish_phase(u)
 
 
 func _finish_phase(u: BattleUnit) -> void:
 	match u.phase:
+		"wait":
+			_set_phase(u, "startup", u.current.startup * u.startup_mult)
 		"startup":
 			u.locked = _select(u, u.current.target, u.current.get("hits", 1))
 			_set_phase(u, "resolve", u.current.resolve)
 		"resolve":
 			_resolve(u)
+			u.sched_index += 1
+			if u.sched_index >= u.schedule.size():
+				u.sched_index = 0
+				u.cycle_base += Schedule.CYCLE
 			if u.alive():
-				_set_phase(u, "cooldown", maxf(u.current.cooldown * u.cooldown_mult, MIN_CYCLE - u.current.resolve - u.current.startup * u.startup_mult))
-		_:
-			_begin_next_ability(u)
+				_begin_next_ability(u)
 
 
 func _set_phase(u: BattleUnit, phase: String, length: float) -> void:
@@ -94,10 +98,15 @@ func _set_phase(u: BattleUnit, phase: String, length: float) -> void:
 	u.phase_total = u.phase_left
 
 
+## Waits until the next block on the unit's timeline is due. An empty timeline waits forever.
 func _begin_next_ability(u: BattleUnit) -> void:
-	u.current = u.abilities[u.plan[u.plan_index % u.plan.size()]]
-	u.plan_index += 1
-	_set_phase(u, "startup", u.current.startup * u.startup_mult)
+	if u.schedule.is_empty():
+		u.current = {}
+		_set_phase(u, "wait", 1.0e9)
+		return
+	var block: Dictionary = u.schedule[u.sched_index]
+	u.current = u.abilities[block.a]
+	_set_phase(u, "wait", u.cycle_base + block.start - u.clock)
 
 
 # ---- Targeting -----------------------------------------------------------
